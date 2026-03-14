@@ -54,7 +54,7 @@ func (s *envStore) KeysFiltered(filter string) []string {
 func (s *envStore) Set(key, value string) error {
 	key = strings.TrimSpace(key)
 	if !envKeyPattern.MatchString(key) {
-		return errors.New("ogiltigt variabelnamn")
+		return errors.New("invalid variable name")
 	}
 	s.values[key] = value
 	return nil
@@ -67,11 +67,11 @@ func (s *envStore) Delete(key string) {
 func (s *envStore) Rename(oldKey, newKey, value string) error {
 	newKey = strings.TrimSpace(newKey)
 	if !envKeyPattern.MatchString(newKey) {
-		return errors.New("ogiltigt variabelnamn")
+		return errors.New("invalid variable name")
 	}
 	if oldKey != newKey {
 		if _, exists := s.values[newKey]; exists {
-			return errors.New("variabeln finns redan")
+			return errors.New("variable already exists")
 		}
 		delete(s.values, oldKey)
 	}
@@ -99,13 +99,13 @@ func (s *envStore) LoadDotEnv(path string) error {
 		}
 		key, rawValue, ok := strings.Cut(line, "=")
 		if !ok {
-			return fmt.Errorf("rad %d saknar '='", lineNo)
+			return fmt.Errorf("line %d is missing '='", lineNo)
 		}
 		key = strings.TrimSpace(key)
 		value := strings.TrimSpace(rawValue)
 		value = strings.Trim(value, "\"")
 		if err := s.Set(key, value); err != nil {
-			return fmt.Errorf("rad %d: %w", lineNo, err)
+			return fmt.Errorf("line %d: %w", lineNo, err)
 		}
 	}
 	return scanner.Err()
@@ -146,9 +146,9 @@ func main() {
 	store := newEnvStore()
 	selectedKey := ""
 
-	status := widget.NewLabel("Klar")
+	status := widget.NewLabel("Ready")
 	searchEntry := widget.NewEntry()
-	searchEntry.SetPlaceHolder("Sök nyckel eller värde…")
+	searchEntry.SetPlaceHolder("Search key or value...")
 
 	keyEntry := widget.NewEntry()
 	valueEntry := widget.NewMultiLineEntry()
@@ -186,14 +186,14 @@ func main() {
 		selectedKey = keys[id]
 		keyEntry.SetText(selectedKey)
 		valueEntry.SetText(store.values[selectedKey])
-		status.SetText("Redigerar: " + selectedKey)
+		status.SetText("Editing: " + selectedKey)
 	}
 
 	saveCurrent := func() {
 		key := strings.TrimSpace(keyEntry.Text)
 		value := valueEntry.Text
 		if key == "" {
-			status.SetText("Nyckel får inte vara tom")
+			status.SetText("Key cannot be empty")
 			return
 		}
 		var err error
@@ -203,49 +203,49 @@ func main() {
 			err = store.Rename(selectedKey, key, value)
 		}
 		if err != nil {
-			status.SetText("Fel: " + err.Error())
+			status.SetText("Error: " + err.Error())
 			return
 		}
 		selectedKey = key
 		refreshList()
-		status.SetText("Sparad: " + key)
+		status.SetText("Saved: " + key)
 	}
 
-	newButton := widget.NewButton("Ny variabel", func() {
+	newButton := widget.NewButton("New variable", func() {
 		resetEditor()
-		status.SetText("Skapa ny variabel")
+		status.SetText("Create a new variable")
 	})
 
-	saveButton := widget.NewButton("Spara ändring", saveCurrent)
+	saveButton := widget.NewButton("Save changes", saveCurrent)
 
-	deleteButton := widget.NewButton("Ta bort", func() {
+	deleteButton := widget.NewButton("Delete", func() {
 		if selectedKey == "" {
-			status.SetText("Välj en variabel att ta bort")
+			status.SetText("Select a variable to delete")
 			return
 		}
 		confirmKey := selectedKey
-		dialog.ShowConfirm("Bekräfta", "Ta bort variabeln '"+confirmKey+"'?", func(ok bool) {
+		dialog.ShowConfirm("Confirm", "Delete variable '"+confirmKey+"'?", func(ok bool) {
 			if !ok {
 				return
 			}
 			store.Delete(confirmKey)
 			resetEditor()
 			refreshList()
-			status.SetText("Borttagen: " + confirmKey)
+			status.SetText("Deleted: " + confirmKey)
 		}, w)
 	})
 
-	reloadButton := widget.NewButton("Läs om från system", func() {
+	reloadButton := widget.NewButton("Reload from system", func() {
 		store.ReloadFromProcess()
 		resetEditor()
 		refreshList()
-		status.SetText("Läste in miljövariabler från nuvarande process")
+		status.SetText("Reloaded environment variables from the current process")
 	})
 
-	importButton := widget.NewButton("Importera .env", func() {
+	importButton := widget.NewButton("Import .env", func() {
 		dialog.ShowFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err != nil {
-				status.SetText("Fel vid filval: " + err.Error())
+				status.SetText("File selection error: " + err.Error())
 				return
 			}
 			if r == nil {
@@ -254,18 +254,18 @@ func main() {
 			path := r.URI().Path()
 			_ = r.Close()
 			if err := store.LoadDotEnv(path); err != nil {
-				status.SetText("Import misslyckades: " + err.Error())
+				status.SetText("Import failed: " + err.Error())
 				return
 			}
 			refreshList()
-			status.SetText("Importerade: " + filepath.Base(path))
+			status.SetText("Imported: " + filepath.Base(path))
 		}, w)
 	})
 
-	exportButton := widget.NewButton("Exportera .env", func() {
+	exportButton := widget.NewButton("Export .env", func() {
 		dialog.ShowFileSave(func(wc fyne.URIWriteCloser, err error) {
 			if err != nil {
-				status.SetText("Fel vid filval: " + err.Error())
+				status.SetText("File selection error: " + err.Error())
 				return
 			}
 			if wc == nil {
@@ -274,10 +274,10 @@ func main() {
 			path := wc.URI().Path()
 			_ = wc.Close()
 			if err := store.SaveDotEnv(path); err != nil {
-				status.SetText("Export misslyckades: " + err.Error())
+				status.SetText("Export failed: " + err.Error())
 				return
 			}
-			status.SetText("Exporterade: " + filepath.Base(path))
+			status.SetText("Exported: " + filepath.Base(path))
 		}, w)
 	})
 
@@ -298,15 +298,15 @@ func main() {
 	)
 
 	editor := container.NewBorder(
-		container.NewVBox(widget.NewLabel("Nyckel"), keyEntry),
+		container.NewVBox(widget.NewLabel("Key"), keyEntry),
 		buttons,
 		nil,
 		nil,
-		container.NewVBox(widget.NewLabel("Värde"), valueEntry),
+		container.NewVBox(widget.NewLabel("Value"), valueEntry),
 	)
 
 	left := container.NewBorder(
-		container.NewVBox(widget.NewLabel("Variabler"), searchEntry),
+		container.NewVBox(widget.NewLabel("Variables"), searchEntry),
 		nil,
 		nil,
 		nil,
